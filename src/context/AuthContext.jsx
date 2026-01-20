@@ -19,13 +19,26 @@ export const AuthProvider = ({ children }) => {
             if (storedUser) {
                 try {
                     const parsedUser = JSON.parse(storedUser);
-                    // Critical: Just check if token exists to maintain session
+
+                    // GHOST USER KILLER: Explicitly check for suspicious data
+                    const isGhostUser =
+                        parsedUser.name === 'Test User' ||
+                        parsedUser.email === 'test123456@test.com' ||
+                        parsedUser._id === '696f49b7e463c5cd1d38c28d';
+
+                    if (isGhostUser) {
+                        console.warn('Ghost User detected! Wiping from storage...');
+                        localStorage.removeItem('user');
+                        setUser(null);
+                        return;
+                    }
+
                     if (parsedUser && parsedUser.token && parsedUser._id) {
                         setUser(parsedUser);
                     }
                 } catch (err) {
-                    console.error('Failed to parse user from storage');
                     localStorage.removeItem('user');
+                    setUser(null);
                 }
             }
             setLoading(false);
