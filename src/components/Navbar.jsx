@@ -108,30 +108,52 @@ const Navbar = () => {
 
                         {user ? (
                             <div className="flex items-center gap-3">
-                                <div className="hidden sm:flex flex-col items-end">
-                                    <span className={`text-xs font-bold ${location.pathname === '/' && !isScrolled ? 'text-white' : 'text-slate-900'}`}>{user.name}</span>
-                                    <span className={`text-[10px] uppercase tracking-wider ${location.pathname === '/' && !isScrolled ? 'text-indigo-300' : 'text-slate-500'}`}>{user.role}</span>
-                                </div>
+                                {/* User Info Clickable */}
+                                <Link to="/profile" className="hidden sm:flex flex-col items-end group">
+                                    <span className={`text-xs font-black tracking-tight transition-colors group-hover:text-indigo-600 ${location.pathname === '/' && !isScrolled ? 'text-white' : 'text-slate-900'}`}>
+                                        {user.name}
+                                    </span>
+                                    <span className={`text-[9px] font-bold uppercase tracking-widest ${location.pathname === '/' && !isScrolled ? 'text-indigo-300' : 'text-indigo-500'}`}>
+                                        {user.role === 'admin' ? 'Administrator' : 'Verified Member'}
+                                    </span>
+                                </Link>
+
                                 <div className="relative group">
-                                    <div className="w-10 h-10 bg-indigo-100 text-indigo-700 flex items-center justify-center rounded-xl font-bold border-2 border-transparent group-hover:border-indigo-200 transition-all overflow-hidden shadow-inner">
-                                        {user.profilePic ? (
-                                            <img src={user.profilePic} alt={user.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                            user.name.charAt(0).toUpperCase()
-                                        )}
-                                    </div>
-                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right scale-95 group-hover:scale-100 z-[60]">
+                                    {/* Profile Avatar Clickable */}
+                                    <Link to="/profile" className="block relative">
+                                        <div className="w-10 h-10 bg-indigo-100 text-indigo-700 flex items-center justify-center rounded-xl font-black border-2 border-transparent group-hover:border-indigo-500 transition-all overflow-hidden shadow-sm active:scale-95">
+                                            {user.profilePic ? (
+                                                <img src={user.profilePic} alt={user.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-indigo-600 text-white text-sm">
+                                                    {user.name.charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* Status Dot */}
+                                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+                                    </Link>
+
+                                    {/* Dropdown Menu */}
+                                    <div className="absolute right-0 top-full mt-3 w-52 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform origin-top-right scale-95 group-hover:scale-100 z-[60]">
                                         <div className="p-2 space-y-1">
+                                            <div className="px-3 py-2 border-b border-slate-50 mb-1">
+                                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Account</p>
+                                            </div>
                                             <Link to="/profile" className="flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors">
-                                                <User className="w-4 h-4" /> Profile
+                                                <User className="w-4 h-4" /> My Profile
+                                            </Link>
+                                            <Link to="/orders" className="flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors">
+                                                <ClipboardList className="w-4 h-4" /> Order History
                                             </Link>
                                             {user.role === 'admin' && (
-                                                <Link to="/admin" className="flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors">
-                                                    <UserCheck className="w-4 h-4" /> {t('nav.admin')}
+                                                <Link to="/admin" className="flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
+                                                    <UserCheck className="w-4 h-4" /> Admin Panel
                                                 </Link>
                                             )}
-                                            <button onClick={logout} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors text-left uppercase tracking-wider">
-                                                <LogOut className="w-4 h-4" /> {t('nav.logout')}
+                                            <div className="h-[1px] bg-slate-50 my-1"></div>
+                                            <button onClick={logout} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors text-left">
+                                                <LogOut className="w-4 h-4" /> Sign Out
                                             </button>
                                         </div>
                                     </div>
