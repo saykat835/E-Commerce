@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
 import { motion } from 'framer-motion';
-import { User, Mail, Phone, MapPin, Camera, Loader2, Save, LogOut, ShieldCheck, CreditCard, ShoppingBag, Globe, City } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Camera, Loader2, Save, LogOut, ShieldCheck, CreditCard, ShoppingBag, Globe, City, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 
 const Profile = () => {
-    const { user, updateProfile, logout } = useAuth();
-    const { t } = useLanguage();
+    const { user, updateProfile, logout, syncBalance } = useAuth();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [imagePreview, setImagePreview] = useState(user?.profilePic || '');
 
@@ -39,14 +39,14 @@ const Profile = () => {
     const handleImageChange = (e) => {
         const file = e.target.files[0];
         if (file) {
-            if (file.size > 1024 * 1024) { // 1MB Limit
-                Swal.fire('Error', 'Image size should be less than 1MB', 'error');
+            if (file.size > 2 * 1024 * 1024) { // 2MB Limit
+                Swal.fire('Error', 'Image size should be less than 2MB', 'error');
                 return;
             }
             const reader = new FileReader();
             reader.onloadend = () => {
                 setImagePreview(reader.result);
-                setFormData({ ...formData, profilePic: reader.result });
+                setFormData(prev => ({ ...prev, profilePic: reader.result }));
             };
             reader.readAsDataURL(file);
         }
@@ -61,230 +61,209 @@ const Profile = () => {
         if (res.success) {
             Swal.fire({
                 icon: 'success',
-                title: 'Profile Updated',
-                text: 'Your profile information has been successfully updated.',
+                title: 'Success!',
+                text: 'Profile updated successfully.',
                 timer: 2000,
                 showConfirmButton: false,
                 background: '#fff',
                 color: '#1e293b',
-                customClass: { popup: 'rounded-[1.5rem]' }
+                customClass: { popup: 'rounded-[2rem]' }
             });
+            // Immediately sync to ensure all parts of app get new data
+            syncBalance();
         } else {
             Swal.fire({
                 icon: 'error',
-                title: 'Update Failed',
+                title: 'Failed',
                 text: res.message,
-                confirmButtonColor: '#6366f1',
-                customClass: { popup: 'rounded-[1.5rem]' }
+                confirmButtonColor: '#6366f1'
             });
         }
     };
 
     return (
-        <div className="min-h-screen bg-slate-50/50 pt-24 pb-12 px-4 sm:px-6 lg:px-8 font-inter">
-            <div className="max-w-4xl mx-auto space-y-8">
-                {/* Header Section */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="min-h-screen bg-[#f8fafc] pb-20 pt-28 font-inter">
+            <div className="max-w-5xl mx-auto px-4 sm:px-6">
+
+                {/* Back Button & Title */}
+                <div className="flex items-center gap-4 mb-8">
+                    <button onClick={() => navigate(-1)} className="p-3 bg-white hover:bg-slate-50 text-slate-600 rounded-2xl shadow-sm border border-slate-100 transition-all">
+                        <ArrowLeft size={20} />
+                    </button>
                     <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Account Settings</h1>
-                        <p className="text-slate-500 font-medium">Manage your profile information and preferences.</p>
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Profile Settings</h1>
+                        <p className="text-sm font-medium text-slate-500">Update your public profile and personal details.</p>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Sidebar / Static Info */}
-                    <div className="lg:col-span-1 space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    {/* Left: Avatar & Stats */}
+                    <div className="lg:col-span-4 space-y-6">
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 flex flex-col items-center text-center space-y-4"
+                            className="bg-white rounded-[2.5rem] p-10 shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col items-center text-center"
                         >
-                            <div className="relative group">
-                                <div className="w-32 h-32 rounded-3xl overflow-hidden bg-slate-100 border-4 border-white shadow-xl">
+                            <div className="relative group mb-6">
+                                <div className="w-36 h-36 rounded-[2.5rem] overflow-hidden bg-slate-50 border-[6px] border-white shadow-2xl relative">
                                     {imagePreview ? (
                                         <img src={imagePreview} alt="Profile" className="w-full h-full object-cover" />
                                     ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-slate-300">
-                                            <User size={48} />
+                                        <div className="w-full h-full flex items-center justify-center bg-indigo-600 text-white text-4xl font-black">
+                                            {user?.name?.charAt(0).toUpperCase()}
                                         </div>
                                     )}
                                 </div>
-                                <label className="absolute -bottom-2 -right-2 w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-lg cursor-pointer hover:bg-indigo-700 transition-colors border-4 border-white">
-                                    <Camera size={18} />
+                                <label className="absolute -bottom-2 -right-2 w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-xl cursor-pointer hover:bg-indigo-700 hover:scale-110 transition-all border-4 border-white">
+                                    <Camera size={20} />
                                     <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
                                 </label>
                             </div>
 
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-900">{user?.name}</h3>
-                                <p className="text-slate-500 text-sm font-medium">{user?.email}</p>
+                            <h3 className="text-xl font-black text-slate-900 mb-1">{user?.name}</h3>
+                            <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-full mb-6 text-center justify-center">
+                                <ShieldCheck size={14} /> Verified Member
                             </div>
 
-                            <div className="w-full pt-4 space-y-2">
-                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
-                                    <span className="text-xs font-black uppercase text-slate-400 tracking-widest">Balance</span>
+                            <div className="w-full grid grid-cols-2 gap-3 pt-6 border-t border-slate-50">
+                                <div className="p-4 bg-slate-50 rounded-3xl text-center">
+                                    <span className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Balance</span>
                                     <span className="text-lg font-black text-indigo-600">${user?.balance?.toFixed(2)}</span>
                                 </div>
-                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
-                                    <span className="text-xs font-black uppercase text-slate-400 tracking-widest">Status</span>
-                                    <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-sm">
-                                        <ShieldCheck size={16} /> Verified
-                                    </div>
+                                <div className="p-4 bg-slate-50 rounded-3xl text-center">
+                                    <span className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Orders</span>
+                                    <span className="text-lg font-black text-slate-900">0</span>
                                 </div>
                             </div>
                         </motion.div>
 
-                        {/* Navigation Links */}
-                        <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 space-y-2">
-                            <button className="w-full flex items-center gap-3 p-4 bg-indigo-50 text-indigo-600 rounded-2xl font-bold text-sm transition-all">
-                                <User size={20} /> Personal Info
+                        <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-slate-100 divide-y divide-slate-50">
+                            <button className="w-full flex items-center justify-between p-4 text-indigo-600 bg-indigo-50/50 rounded-2xl font-black text-sm transition-all group">
+                                <span className="flex items-center gap-3">
+                                    <User size={18} /> Public Profile
+                                </span>
                             </button>
-                            <button onClick={() => Swal.fire('Orders', 'Redirecting to orders page...', 'info')} className="w-full flex items-center gap-3 p-4 text-slate-600 hover:bg-slate-50 rounded-2xl font-bold text-sm transition-all">
-                                <ShoppingBag size={20} /> My Orders
+                            <button onClick={() => navigate('/orders')} className="w-full flex items-center justify-between p-4 text-slate-600 hover:text-indigo-600 rounded-2xl font-bold text-sm transition-all">
+                                <span className="flex items-center gap-3">
+                                    <ShoppingBag size={18} /> My Orders
+                                </span>
                             </button>
-                            <button className="w-full flex items-center gap-3 p-4 text-slate-600 hover:bg-slate-50 rounded-2xl font-bold text-sm transition-all">
-                                <CreditCard size={20} /> Payment Methods
-                            </button>
-                            <div className="h-[1px] bg-slate-100 my-2" />
-                            <button
-                                onClick={logout}
-                                className="w-full flex items-center gap-3 p-4 text-rose-500 hover:bg-rose-50 rounded-2xl font-bold text-sm transition-all"
-                            >
-                                <LogOut size={20} /> Sign Out
+                            <button onClick={logout} className="w-full flex items-center justify-between p-4 text-rose-500 hover:bg-rose-50 rounded-2xl font-bold text-sm transition-all mt-1">
+                                <span className="flex items-center gap-3">
+                                    <LogOut size={18} /> Logout
+                                </span>
                             </button>
                         </div>
                     </div>
 
-                    {/* Main Form */}
-                    <div className="lg:col-span-2">
-                        <motion.div
+                    {/* Right: Detailed Form */}
+                    <div className="lg:col-span-8">
+                        <motion.form
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
-                            className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden"
+                            onSubmit={handleSubmit}
+                            className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden"
                         >
-                            <div className="p-8 sm:p-10">
-                                <form onSubmit={handleSubmit} className="space-y-8">
-                                    {/* Personal Info Section */}
-                                    <div className="space-y-6">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center">
-                                                <User size={18} />
-                                            </div>
-                                            <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Basic Details</h2>
+                            <div className="p-8 sm:p-12 space-y-10">
+                                {/* Section 1 */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg">
+                                            <User size={20} />
                                         </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-2">
-                                                <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Full Name</label>
-                                                <div className="relative">
-                                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                                                    <input
-                                                        type="text" required value={formData.name}
-                                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900"
-                                                        placeholder="Name"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Email Address</label>
-                                                <div className="relative opacity-60">
-                                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                                                    <input
-                                                        type="email" disabled value={formData.email}
-                                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-900 cursor-not-allowed"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Phone Number</label>
-                                                <div className="relative">
-                                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                                                    <input
-                                                        type="tel" value={formData.phone}
-                                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900"
-                                                        placeholder="Phone"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <h2 className="text-xl font-black text-slate-900 tracking-tight">Personal Information</h2>
                                     </div>
 
-                                    {/* Address Section */}
-                                    <div className="space-y-6 pt-4 border-t border-slate-50">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center">
-                                                <MapPin size={18} />
-                                            </div>
-                                            <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Shipping Address</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2.5">
+                                            <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Full Name</label>
+                                            <input
+                                                type="text" required value={formData.name}
+                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900"
+                                                placeholder="Enter your name"
+                                            />
                                         </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Detailed Address</label>
-                                            <div className="relative">
-                                                <MapPin className="absolute left-4 top-4 w-5 h-5 text-slate-300" />
-                                                <textarea
-                                                    rows="3" value={formData.address}
-                                                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900"
-                                                    placeholder="Street name, House no, Apartement..."
-                                                ></textarea>
-                                            </div>
+                                        <div className="space-y-2.5">
+                                            <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Email Address</label>
+                                            <input
+                                                type="email" disabled value={formData.email}
+                                                className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-400 cursor-not-allowed"
+                                            />
                                         </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-2">
-                                                <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">City</label>
-                                                <div className="relative">
-                                                    <City className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                                                    <input
-                                                        type="text" value={formData.city}
-                                                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900"
-                                                        placeholder="City"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Country</label>
-                                                <div className="relative">
-                                                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                                                    <select
-                                                        value={formData.country}
-                                                        onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                                                        className="w-full pl-12 pr-10 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900 accent-indigo-600 appearance-none"
-                                                    >
-                                                        <option value="Bangladesh">Bangladesh</option>
-                                                        <option value="USA">United States</option>
-                                                        <option value="UK">United Kingdom</option>
-                                                        <option value="Canada">Canada</option>
-                                                        <option value="Australia">Australia</option>
-                                                        <option value="India">India</option>
-                                                        <option value="Germany">Germany</option>
-                                                    </select>
-                                                </div>
-                                            </div>
+                                        <div className="space-y-2.5">
+                                            <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Phone Number</label>
+                                            <input
+                                                type="tel" value={formData.phone}
+                                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                                className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900"
+                                                placeholder="Phone number"
+                                            />
                                         </div>
                                     </div>
+                                </div>
 
-                                    <button
-                                        type="submit"
-                                        disabled={loading}
-                                        className="w-full py-5 bg-slate-900 hover:bg-slate-800 text-white rounded-[1.5rem] font-black transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 mt-4 group"
-                                    >
-                                        {loading ? (
-                                            <Loader2 className="w-6 h-6 animate-spin text-white" />
-                                        ) : (
-                                            <>
-                                                <Save size={20} className="group-hover:scale-110 transition-transform" />
-                                                Save Profile Changes
-                                            </>
-                                        )}
-                                    </button>
-                                </form>
+                                {/* Section 2 */}
+                                <div className="space-y-6 pt-6 border-t border-slate-50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg">
+                                            <MapPin size={20} />
+                                        </div>
+                                        <h2 className="text-xl font-black text-slate-900 tracking-tight">Shipping Location</h2>
+                                    </div>
+
+                                    <div className="space-y-2.5">
+                                        <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Street Address</label>
+                                        <textarea
+                                            rows="2" value={formData.address}
+                                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                            className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900 resize-none"
+                                            placeholder="House no, Street name, Apartment..."
+                                        ></textarea>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2.5">
+                                            <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">City</label>
+                                            <input
+                                                type="text" value={formData.city}
+                                                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                                                className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900"
+                                                placeholder="Enter city"
+                                            />
+                                        </div>
+                                        <div className="space-y-2.5">
+                                            <label className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">Country</label>
+                                            <select
+                                                value={formData.country}
+                                                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                                                className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-200 transition-all font-bold text-slate-900 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207L10%2012L15%207%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px_20px] bg-[right_1.5rem_center] bg-no-repeat"
+                                            >
+                                                <option value="Bangladesh">Bangladesh</option>
+                                                <option value="USA">United States</option>
+                                                <option value="UK">United Kingdom</option>
+                                                <option value="India">India</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full py-5 bg-slate-900 hover:bg-slate-800 text-white rounded-[1.5rem] font-black transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 group"
+                                >
+                                    {loading ? (
+                                        <Loader2 className="w-6 h-6 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <Save size={20} className="group-hover:scale-110 transition-transform" />
+                                            Update Profile
+                                        </>
+                                    )}
+                                </button>
                             </div>
-                        </motion.div>
+                        </motion.form>
                     </div>
                 </div>
             </div>

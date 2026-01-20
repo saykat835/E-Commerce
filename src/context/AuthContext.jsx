@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }) => {
             const res = await axios.post(`${API_URL}/auth/login`, { email, password });
             setUser(res.data);
             localStorage.setItem('user', JSON.stringify(res.data));
-            return { success: true };
+            return { success: true, user: res.data };
         } catch (err) {
             return { success: false, message: err.response?.data?.message || 'Login failed' };
         }
@@ -51,7 +51,8 @@ export const AuthProvider = ({ children }) => {
             const res = await axios.put(`${API_URL}/auth/profile`, userData, {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
-            const updatedUser = { ...res.data };
+            // Merge existing token with updated user data correctly
+            const updatedUser = { ...res.data, token: user.token };
             setUser(updatedUser);
             localStorage.setItem('user', JSON.stringify(updatedUser));
             return { success: true, user: updatedUser };
@@ -100,11 +101,12 @@ export const AuthProvider = ({ children }) => {
             const res = await axios.get(`${API_URL}/auth/me`, {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
-            const updatedUser = { ...user, balance: res.data.balance };
+            // Update all user fields dynamically without overwriting token
+            const updatedUser = { ...user, ...res.data };
             setUser(updatedUser);
             localStorage.setItem('user', JSON.stringify(updatedUser));
         } catch (err) {
-            console.error('Balance sync failed', err);
+            console.error('Data sync failed', err);
         }
     };
 
