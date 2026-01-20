@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext();
@@ -8,18 +8,21 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const syncInterval = useRef(null);
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
+    // Initialize Auth State from LocalStorage
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
             try {
                 const parsedUser = JSON.parse(storedUser);
-                // Ensure the user has a real ID and name, not just dummy data
-                if (parsedUser && parsedUser._id && parsedUser.name !== 'Test User') {
+                // Valid user check: must have ID, Token and not be the phantom "Test User"
+                if (parsedUser && parsedUser._id && parsedUser.token && parsedUser.name !== 'Test User') {
                     setUser(parsedUser);
                 } else {
+                    console.log('Invalid user data found, clearing...');
                     localStorage.removeItem('user');
                     setUser(null);
                 }
@@ -31,12 +34,25 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
     }, []);
 
+    // Helper to persist user and update state
+    const saveUser = (userData) => {
+        if (!userData) {
+            setUser(null);
+            localStorage.removeItem('user');
+            return;
+        }
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
+    };
+
     const login = async (email, password) => {
         try {
             const res = await axios.post(`${API_URL}/auth/login`, { email, password });
-            setUser(res.data);
-            localStorage.setItem('user', JSON.stringify(res.data));
-            return { success: true, user: res.data };
+            if (res.data) {
+                saveUser(res.data);
+                return { success: true, user: res.data };
+            }
+            return { success: false, message: 'Invalid response from server' };
         } catch (err) {
             return { success: false, message: err.response?.data?.message || 'Login failed' };
         }
@@ -45,88 +61,88 @@ export const AuthProvider = ({ children }) => {
     const signup = async (name, email, password, phone) => {
         try {
             const res = await axios.post(`${API_URL}/auth/signup`, { name, email, password, phone });
-            setUser(res.data);
-            localStorage.setItem('user', JSON.stringify(res.data));
-            return { success: true, user: res.data };
+            if (res.data) {
+                saveUser(res.data);
+                return { success: true, user: res.data };
+            }
+            return { success: false, message: 'Invalid response from server' };
         } catch (err) {
             return { success: false, message: err.response?.data?.message || 'Signup failed' };
         }
     };
 
     const logout = () => {
-        setUser(null);
-        localStorage.removeItem('user');
+        if (syncInterval.current) clearInterval(syncInterval.current);
+        saveUser(null);
     };
 
     const updateProfile = async (userData) => {
+        if (!user?.token) return { success: false, message: 'No auth token found' };
         try {
             const res = await axios.put(`${API_URL}/auth/profile`, userData, {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
-            // Merge existing token with updated user data correctly
-            const updatedUser = { ...res.data, token: user.token };
-            setUser(updatedUser);
-            localStorage.setItem('user', JSON.stringify(updatedUser));
+            // Ensure token is preserved if backend doesn't return a new one
+            const updatedUser = { ...user, ...res.data };
+            if (res.data.token) updatedUser.token = res.data.token;
+
+            saveUser(updatedUser);
             return { success: true, user: updatedUser };
         } catch (err) {
+            // Auto-logout if token is rejected
+            if (err.response?.status === 401) logout();
             return { success: false, message: err.response?.data?.message || 'Update failed' };
-        }
-    };
-
-    const deleteUser = async (userId) => {
-        try {
-            await axios.delete(`${API_URL}/auth/users/${userId}`, {
-                headers: { Authorization: `Bearer ${user.token}` }
-            });
-            return { success: true };
-        } catch (err) {
-            return { success: false, message: err.response?.data?.message || 'Delete failed' };
-        }
-    };
-
-    const updateUserBalance = async (userId, balance) => {
-        try {
-            const res = await axios.put(`${API_URL}/auth/users/${userId}/balance`, { balance }, {
-                headers: { Authorization: `Bearer ${user.token}` }
-            });
-            return { success: true, data: res.data };
-        } catch (err) {
-            return { success: false, message: err.response?.data?.message || 'Update failed' };
-        }
-    };
-
-    const getUsers = async () => {
-        try {
-            const res = await axios.get(`${API_URL}/auth/users`, {
-                headers: { Authorization: `Bearer ${user.token}` }
-            });
-            return res.data;
-        } catch (err) {
-            console.error(err);
-            return [];
         }
     };
 
     const syncBalance = async () => {
-        if (!user) return;
+        // Only sync if user is active and has a token
+        if (!user?.token) return;
+
         try {
             const res = await axios.get(`${API_URL}/auth/me`, {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
-            // Update all user fields dynamically without overwriting token
-            const updatedUser = { ...user, ...res.data };
-            setUser(updatedUser);
-            localStorage.setItem('user', JSON.stringify(updatedUser));
+
+            // Critical: Only update if we get valid data and preserve the token
+            if (res.data && res.data._id) {
+                const updatedUser = { ...user, ...res.data };
+                // Don't let sync data overwrite the token if not present in /me response
+                if (!res.data.token) updatedUser.token = user.token;
+
+                // Only update state if something actually changed to avoid re-renders
+                if (JSON.stringify(user) !== JSON.stringify(updatedUser)) {
+                    saveUser(updatedUser);
+                }
+            }
         } catch (err) {
-            console.error('Data sync failed', err);
+            console.error('Data sync failed', err.message);
+            // If the error is 401 (Unauthorized), user session has expired
+            if (err.response?.status === 401) {
+                console.warn('Session expired, logging out...');
+                logout();
+            }
         }
     };
 
+    // Global Sync Interval Management
     useEffect(() => {
-        if (user) {
-            const interval = setInterval(syncBalance, 30000); // Sync every 30s
-            return () => clearInterval(interval);
+        if (user && user.token) {
+            if (!syncInterval.current) {
+                syncInterval.current = setInterval(syncBalance, 30000);
+            }
+        } else {
+            if (syncInterval.current) {
+                clearInterval(syncInterval.current);
+                syncInterval.current = null;
+            }
         }
+        return () => {
+            if (syncInterval.current) {
+                clearInterval(syncInterval.current);
+                syncInterval.current = null;
+            }
+        };
     }, [user]);
 
     const isAdmin = () => user?.role === 'admin';
@@ -134,7 +150,7 @@ export const AuthProvider = ({ children }) => {
     return (
         <AuthContext.Provider value={{
             user, login, register: signup, logout, isAdmin, loading,
-            updateProfile, getUsers, deleteUser, updateUserBalance, syncBalance
+            updateProfile, syncBalance
         }}>
             {children}
         </AuthContext.Provider>
