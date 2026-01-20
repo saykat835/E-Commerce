@@ -14,7 +14,19 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
-            setUser(JSON.parse(storedUser));
+            try {
+                const parsedUser = JSON.parse(storedUser);
+                // Ensure the user has a real ID and name, not just dummy data
+                if (parsedUser && parsedUser._id && parsedUser.name !== 'Test User') {
+                    setUser(parsedUser);
+                } else {
+                    localStorage.removeItem('user');
+                    setUser(null);
+                }
+            } catch (err) {
+                localStorage.removeItem('user');
+                setUser(null);
+            }
         }
         setLoading(false);
     }, []);

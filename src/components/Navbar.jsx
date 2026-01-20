@@ -111,11 +111,13 @@ const Navbar = () => {
                                 {/* User Info Clickable */}
                                 <Link to="/profile" className="hidden sm:flex flex-col items-end group">
                                     <span className={`text-xs font-black tracking-tight transition-colors group-hover:text-indigo-600 ${location.pathname === '/' && !isScrolled ? 'text-white' : 'text-slate-900'}`}>
-                                        {user.name}
+                                        {user?.name}
                                     </span>
-                                    <span className={`text-[9px] font-bold uppercase tracking-widest ${location.pathname === '/' && !isScrolled ? 'text-indigo-300' : 'text-indigo-500'}`}>
-                                        {user.role === 'admin' ? 'Administrator' : 'Verified Member'}
-                                    </span>
+                                    {user?.name && (
+                                        <span className={`text-[9px] font-bold uppercase tracking-widest ${location.pathname === '/' && !isScrolled ? 'text-indigo-300' : 'text-indigo-500'}`}>
+                                            {user.role === 'admin' ? 'Administrator' : 'Verified Member'}
+                                        </span>
+                                    )}
                                 </Link>
 
                                 <div className="relative group">

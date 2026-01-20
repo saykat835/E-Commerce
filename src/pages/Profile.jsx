@@ -120,10 +120,14 @@ const Profile = () => {
                                 </label>
                             </div>
 
-                            <h3 className="text-xl font-black text-slate-900 mb-1">{user?.name}</h3>
-                            <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-full mb-6 text-center justify-center">
-                                <ShieldCheck size={14} /> Verified Member
-                            </div>
+                            {user?.name && (
+                                <>
+                                    <h3 className="text-xl font-black text-slate-900 mb-1">{user.name}</h3>
+                                    <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-full mb-6 text-center justify-center">
+                                        <ShieldCheck size={14} /> Verified Member
+                                    </div>
+                                </>
+                            )}
 
                             <div className="w-full grid grid-cols-2 gap-3 pt-6 border-t border-slate-50">
                                 <div className="p-4 bg-slate-50 rounded-3xl text-center">
