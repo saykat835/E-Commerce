@@ -149,7 +149,7 @@ const AdminUsers = () => {
                                     <td colSpan="5" className="px-8 py-20 text-center">
                                         <div className="flex flex-col items-center gap-3">
                                             <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
-                                            <p className="text-slate-400 font-bold">Synchronizing neurological data...</p>
+                                            <p className="text-slate-400 font-bold">Synchronizing user data...</p>
                                         </div>
                                     </td>
                                 </tr>

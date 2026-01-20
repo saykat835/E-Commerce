@@ -147,12 +147,49 @@ export const AuthProvider = ({ children }) => {
         };
     }, [user?.token]);
 
+    const getUsers = async () => {
+        if (!user?.token) return [];
+        try {
+            const res = await axios.get(`${API_URL}/auth/users`, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            return res.data;
+        } catch (err) {
+            console.error(err);
+            return [];
+        }
+    };
+
+    const deleteUser = async (id) => {
+        if (!user?.token) return { success: false };
+        try {
+            await axios.delete(`${API_URL}/auth/users/${id}`, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            return { success: true };
+        } catch (err) {
+            return { success: false, message: err.response?.data?.message || 'Delete failed' };
+        }
+    };
+
+    const updateUserBalance = async (id, balance) => {
+        if (!user?.token) return { success: false };
+        try {
+            await axios.put(`${API_URL}/auth/users/${id}/balance`, { balance }, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            return { success: true };
+        } catch (err) {
+            return { success: false, message: err.response?.data?.message || 'Update failed' };
+        }
+    };
+
     const isAdmin = () => user?.role === 'admin';
 
     return (
         <AuthContext.Provider value={{
             user, login, register: signup, logout, isAdmin, loading,
-            updateProfile, syncBalance
+            updateProfile, syncBalance, getUsers, deleteUser, updateUserBalance
         }}>
             {children}
         </AuthContext.Provider>
