@@ -5,6 +5,32 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
+// Helper to get/set cookies
+const setCookie = (name, value, days) => {
+    let expires = "";
+    if (days) {
+        let date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
+};
+
+const getCookie = (name) => {
+    let nameEQ = name + "=";
+    let ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    }
+    return null;
+};
+
+const deleteCookie = (name) => {
+    document.cookie = name + '=; Max-Age=-99999999; path=/;';
+};
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -12,48 +38,66 @@ export const AuthProvider = ({ children }) => {
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
-    // Initialize Auth State from LocalStorage
+    // 1. First Load Logic
     useEffect(() => {
-        const loadStoredUser = () => {
+        const initializeAuth = async () => {
             const storedUser = localStorage.getItem('user');
-            if (storedUser) {
+            const token = getCookie('auth_token');
+
+            if (token) {
                 try {
-                    const parsedUser = JSON.parse(storedUser);
-
-                    // GHOST USER KILLER: Explicitly check for suspicious data
-                    const isGhostUser =
-                        parsedUser.name === 'Test User' ||
-                        parsedUser.email === 'test123456@test.com' ||
-                        parsedUser._id === '696f49b7e463c5cd1d38c28d';
-
-                    if (isGhostUser) {
-                        console.warn('Ghost User detected! Wiping from storage...');
-                        localStorage.removeItem('user');
-                        setUser(null);
-                        return;
+                    // Start by trying to load cached user
+                    let userData = null;
+                    if (storedUser) {
+                        userData = JSON.parse(storedUser);
+                        // Ghost user protection
+                        if (userData.name === 'Test User' || userData.email === 'test123456@test.com') {
+                            throw new Error('Ghost detected');
+                        }
                     }
 
-                    if (parsedUser && parsedUser.token && parsedUser._id) {
-                        setUser(parsedUser);
+                    // Always verify with server if token exists to ensure session stability
+                    const res = await axios.get(`${API_URL}/auth/me`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+
+                    if (res.data && res.data._id) {
+                        const validatedUser = { ...res.data, token };
+                        setUser(validatedUser);
+                        localStorage.setItem('user', JSON.stringify(validatedUser));
+                    } else if (userData) {
+                        setUser({ ...userData, token }); // Fallback to cache if server is slow
                     }
                 } catch (err) {
-                    localStorage.removeItem('user');
-                    setUser(null);
+                    console.error('Auth check failed:', err.message);
+                    if (err.response?.status === 401) {
+                        logout(); // Only logout if token is actually invalid
+                    } else if (storedUser) {
+                        // If it's just a network error, don't logout, use cache
+                        const u = JSON.parse(storedUser);
+                        setUser({ ...u, token });
+                    }
                 }
+            } else {
+                localStorage.removeItem('user');
+                setUser(null);
             }
             setLoading(false);
         };
-        loadStoredUser();
+        initializeAuth();
     }, []);
 
     const saveUser = (userData) => {
         if (!userData) {
             setUser(null);
             localStorage.removeItem('user');
+            deleteCookie('auth_token');
         } else {
-            // Merge carefully to not lose token
             setUser(userData);
             localStorage.setItem('user', JSON.stringify(userData));
+            if (userData.token) {
+                setCookie('auth_token', userData.token, 30); // Save token for 30 days
+            }
         }
     };
 
@@ -64,7 +108,7 @@ export const AuthProvider = ({ children }) => {
                 saveUser(res.data);
                 return { success: true, user: res.data };
             }
-            return { success: false, message: 'Login failed: Invalid data from server' };
+            return { success: false, message: 'Invalid server response' };
         } catch (err) {
             return { success: false, message: err.response?.data?.message || 'Login failed' };
         }
@@ -77,30 +121,25 @@ export const AuthProvider = ({ children }) => {
                 saveUser(res.data);
                 return { success: true, user: res.data };
             }
-            return { success: false, message: 'Signup failed: Invalid data from server' };
+            return { success: false, message: 'Signup failed' };
         } catch (err) {
             return { success: false, message: err.response?.data?.message || 'Signup failed' };
         }
     };
 
     const logout = () => {
-        if (syncInterval.current) {
-            clearInterval(syncInterval.current);
-            syncInterval.current = null;
-        }
+        if (syncInterval.current) clearInterval(syncInterval.current);
         saveUser(null);
     };
 
     const updateProfile = async (userData) => {
-        if (!user?.token) return { success: false, message: 'Session expired' };
+        const token = getCookie('auth_token') || user?.token;
+        if (!token) return { success: false, message: 'No session' };
         try {
             const res = await axios.put(`${API_URL}/auth/profile`, userData, {
-                headers: { Authorization: `Bearer ${user.token}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
-            // Update state while keeping the newest token
-            const updatedUser = { ...user, ...res.data };
-            if (res.data.token) updatedUser.token = res.data.token;
-
+            const updatedUser = { ...user, ...res.data, token };
             saveUser(updatedUser);
             return { success: true, user: updatedUser };
         } catch (err) {
@@ -109,79 +148,55 @@ export const AuthProvider = ({ children }) => {
     };
 
     const syncBalance = async () => {
-        // Quiet background sync - NO LOGOUT on failure
-        if (!user?.token) return;
-
+        const token = getCookie('auth_token') || user?.token;
+        if (!token) return;
         try {
             const res = await axios.get(`${API_URL}/auth/me`, {
-                headers: { Authorization: `Bearer ${user.token}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
-
             if (res.data && res.data._id) {
-                // Combine and preserve the current token always
-                const refreshedUser = { ...user, ...res.data, token: user.token };
-
-                // Only write to localStorage if there's a real change to avoid loop
-                if (user.balance !== refreshedUser.balance || user.name !== refreshedUser.name || user.profilePic !== refreshedUser.profilePic) {
+                const refreshedUser = { ...user, ...res.data, token };
+                if (JSON.stringify(user) !== JSON.stringify(refreshedUser)) {
                     setUser(refreshedUser);
                     localStorage.setItem('user', JSON.stringify(refreshedUser));
                 }
             }
         } catch (err) {
-            // Log error but DO NOT logout
-            console.log('Background sync skipped due to network/server.');
+            console.log('Sync skipped - Network/Server issue');
         }
     };
 
-    useEffect(() => {
-        if (user && user.token) {
-            if (!syncInterval.current) {
-                syncInterval.current = setInterval(syncBalance, 60000); // 1 minute interval for stability
-            }
-        }
-        return () => {
-            if (syncInterval.current) {
-                clearInterval(syncInterval.current);
-                syncInterval.current = null;
-            }
-        };
-    }, [user?.token]);
-
     const getUsers = async () => {
-        if (!user?.token) return [];
+        const token = getCookie('auth_token') || user?.token;
+        if (!token) return [];
         try {
             const res = await axios.get(`${API_URL}/auth/users`, {
-                headers: { Authorization: `Bearer ${user.token}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
             return res.data;
-        } catch (err) {
-            console.error(err);
-            return [];
-        }
+        } catch (err) { return []; }
     };
 
     const deleteUser = async (id) => {
-        if (!user?.token) return { success: false };
+        const token = getCookie('auth_token') || user?.token;
+        if (!token) return { success: false };
         try {
             await axios.delete(`${API_URL}/auth/users/${id}`, {
-                headers: { Authorization: `Bearer ${user.token}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
             return { success: true };
-        } catch (err) {
-            return { success: false, message: err.response?.data?.message || 'Delete failed' };
-        }
+        } catch (err) { return { success: false }; }
     };
 
     const updateUserBalance = async (id, balance) => {
-        if (!user?.token) return { success: false };
+        const token = getCookie('auth_token') || user?.token;
+        if (!token) return { success: false };
         try {
             await axios.put(`${API_URL}/auth/users/${id}/balance`, { balance }, {
-                headers: { Authorization: `Bearer ${user.token}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
             return { success: true };
-        } catch (err) {
-            return { success: false, message: err.response?.data?.message || 'Update failed' };
-        }
+        } catch (err) { return { success: false }; }
     };
 
     const isAdmin = () => user?.role === 'admin';
