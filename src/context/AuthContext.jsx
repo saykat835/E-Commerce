@@ -14,45 +14,44 @@ export const AuthProvider = ({ children }) => {
 
     // Initialize Auth State from LocalStorage
     useEffect(() => {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-            try {
-                const parsedUser = JSON.parse(storedUser);
-                // Valid user check: must have ID, Token and not be the phantom "Test User"
-                if (parsedUser && parsedUser._id && parsedUser.token && parsedUser.name !== 'Test User') {
-                    setUser(parsedUser);
-                } else {
-                    console.log('Invalid user data found, clearing...');
+        const loadStoredUser = () => {
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+                try {
+                    const parsedUser = JSON.parse(storedUser);
+                    // Critical: Just check if token exists to maintain session
+                    if (parsedUser && parsedUser.token && parsedUser._id) {
+                        setUser(parsedUser);
+                    }
+                } catch (err) {
+                    console.error('Failed to parse user from storage');
                     localStorage.removeItem('user');
-                    setUser(null);
                 }
-            } catch (err) {
-                localStorage.removeItem('user');
-                setUser(null);
             }
-        }
-        setLoading(false);
+            setLoading(false);
+        };
+        loadStoredUser();
     }, []);
 
-    // Helper to persist user and update state
     const saveUser = (userData) => {
         if (!userData) {
             setUser(null);
             localStorage.removeItem('user');
-            return;
+        } else {
+            // Merge carefully to not lose token
+            setUser(userData);
+            localStorage.setItem('user', JSON.stringify(userData));
         }
-        setUser(userData);
-        localStorage.setItem('user', JSON.stringify(userData));
     };
 
     const login = async (email, password) => {
         try {
             const res = await axios.post(`${API_URL}/auth/login`, { email, password });
-            if (res.data) {
+            if (res.data && res.data.token) {
                 saveUser(res.data);
                 return { success: true, user: res.data };
             }
-            return { success: false, message: 'Invalid response from server' };
+            return { success: false, message: 'Login failed: Invalid data from server' };
         } catch (err) {
             return { success: false, message: err.response?.data?.message || 'Login failed' };
         }
@@ -61,42 +60,43 @@ export const AuthProvider = ({ children }) => {
     const signup = async (name, email, password, phone) => {
         try {
             const res = await axios.post(`${API_URL}/auth/signup`, { name, email, password, phone });
-            if (res.data) {
+            if (res.data && res.data.token) {
                 saveUser(res.data);
                 return { success: true, user: res.data };
             }
-            return { success: false, message: 'Invalid response from server' };
+            return { success: false, message: 'Signup failed: Invalid data from server' };
         } catch (err) {
             return { success: false, message: err.response?.data?.message || 'Signup failed' };
         }
     };
 
     const logout = () => {
-        if (syncInterval.current) clearInterval(syncInterval.current);
+        if (syncInterval.current) {
+            clearInterval(syncInterval.current);
+            syncInterval.current = null;
+        }
         saveUser(null);
     };
 
     const updateProfile = async (userData) => {
-        if (!user?.token) return { success: false, message: 'No auth token found' };
+        if (!user?.token) return { success: false, message: 'Session expired' };
         try {
             const res = await axios.put(`${API_URL}/auth/profile`, userData, {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
-            // Ensure token is preserved if backend doesn't return a new one
+            // Update state while keeping the newest token
             const updatedUser = { ...user, ...res.data };
             if (res.data.token) updatedUser.token = res.data.token;
 
             saveUser(updatedUser);
             return { success: true, user: updatedUser };
         } catch (err) {
-            // Auto-logout if token is rejected
-            if (err.response?.status === 401) logout();
             return { success: false, message: err.response?.data?.message || 'Update failed' };
         }
     };
 
     const syncBalance = async () => {
-        // Only sync if user is active and has a token
+        // Quiet background sync - NO LOGOUT on failure
         if (!user?.token) return;
 
         try {
@@ -104,37 +104,26 @@ export const AuthProvider = ({ children }) => {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
 
-            // Critical: Only update if we get valid data and preserve the token
             if (res.data && res.data._id) {
-                const updatedUser = { ...user, ...res.data };
-                // Don't let sync data overwrite the token if not present in /me response
-                if (!res.data.token) updatedUser.token = user.token;
+                // Combine and preserve the current token always
+                const refreshedUser = { ...user, ...res.data, token: user.token };
 
-                // Only update state if something actually changed to avoid re-renders
-                if (JSON.stringify(user) !== JSON.stringify(updatedUser)) {
-                    saveUser(updatedUser);
+                // Only write to localStorage if there's a real change to avoid loop
+                if (user.balance !== refreshedUser.balance || user.name !== refreshedUser.name || user.profilePic !== refreshedUser.profilePic) {
+                    setUser(refreshedUser);
+                    localStorage.setItem('user', JSON.stringify(refreshedUser));
                 }
             }
         } catch (err) {
-            console.error('Data sync failed', err.message);
-            // If the error is 401 (Unauthorized), user session has expired
-            if (err.response?.status === 401) {
-                console.warn('Session expired, logging out...');
-                logout();
-            }
+            // Log error but DO NOT logout
+            console.log('Background sync skipped due to network/server.');
         }
     };
 
-    // Global Sync Interval Management
     useEffect(() => {
         if (user && user.token) {
             if (!syncInterval.current) {
-                syncInterval.current = setInterval(syncBalance, 30000);
-            }
-        } else {
-            if (syncInterval.current) {
-                clearInterval(syncInterval.current);
-                syncInterval.current = null;
+                syncInterval.current = setInterval(syncBalance, 60000); // 1 minute interval for stability
             }
         }
         return () => {
@@ -143,7 +132,7 @@ export const AuthProvider = ({ children }) => {
                 syncInterval.current = null;
             }
         };
-    }, [user]);
+    }, [user?.token]);
 
     const isAdmin = () => user?.role === 'admin';
 
