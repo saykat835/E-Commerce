@@ -122,6 +122,9 @@ const Navbar = () => {
                                     </div>
                                     <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right scale-95 group-hover:scale-100 z-[60]">
                                         <div className="p-2 space-y-1">
+                                            <Link to="/profile" className="flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors">
+                                                <User className="w-4 h-4" /> Profile
+                                            </Link>
                                             {user.role === 'admin' && (
                                                 <Link to="/admin" className="flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors">
                                                     <UserCheck className="w-4 h-4" /> {t('nav.admin')}

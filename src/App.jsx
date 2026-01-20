@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import AdminLogin from './pages/AdminLogin';
 import UserDeposit from './pages/UserDeposit';
+import Profile from './pages/Profile';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CartSidebar from './components/CartSidebar';
@@ -51,6 +52,10 @@ function AppContent() {
         <Route
           path="/deposit"
           element={user ? <UserDeposit /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/profile"
+          element={user ? <Profile /> : <Navigate to="/login" />}
         />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route
